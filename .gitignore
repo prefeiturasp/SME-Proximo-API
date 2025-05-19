@@ -1,0 +1,37 @@
+_material
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# virtual environment
+venv/
+env/
+.venv/
+*.egg-info/
+*.egg
+
+# Distribution / packaging
+.DS_Store
+build/
+dist/
+*.whl
+
+# Log files and databases
+*.log
+*.db
+*.sqlite
+
+# Environment variables
+.env
+.env.*
+*.local
+
+# Testing
+/tests/__pycache__
+
+# IDE
+.idea/
+*.iml
+.vscode/
