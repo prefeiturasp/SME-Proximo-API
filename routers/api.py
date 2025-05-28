@@ -90,7 +90,7 @@ async def proximo_item(
                 str(round(PAR[pos, 1], 14)),
                 str(round(parC[pos], 3)),
                 str(round(profic_inic, 13)),
-                "null"
+                "NA"
             ]
         else:
             # ESTIMA PROFICIÊNCIA
@@ -119,10 +119,10 @@ async def proximo_item(
                 return [
                     "-1",
                     str(len(respostas_corrigidas)),
-                    "null",
-                    "null",
-                    "null",
-                    "null",
+                    "NA",
+                    "NA",
+                    "NA",
+                    "NA",
                     str(round(theta_est * 55.093 + 249.985, 13)),
                     str(round(theta_ep * 55.093, 13))
                 ]
