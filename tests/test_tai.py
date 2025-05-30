@@ -191,3 +191,82 @@ def test_normalizacao_componente(sample_request_data):
         assert response.status_code == 200
         
         # Se o teste passar sem erro, consideramos que a normalização funcionou
+
+# Novos testes para o endpoint /proximo
+# Teste: respostas e gabarito com tamanho diferente
+def test_respostas_e_gabarito_diferentes():
+    request_data = {
+        "ESTUDANTE": "Aluno1",
+        "AnoEscolarEstudante": "9",
+        "proficiencia": "500.0",
+        "profic.inic": "500.0",
+        "idItem": "ITEM1,ITEM2",
+        "parA": "1.0,1.5",
+        "parB": "250.0,300.0",
+        "parC": "0.2,0.3",
+        "administrado": "ITEM1,ITEM2",
+        "respostas": "A,B",
+        "gabarito": "A",
+        "erropadrao": "0.5",
+        "n.Ij": "45",
+        "componente": "LP",
+        "idEixo": "1,2",
+        "idHabilidade": "2,3"
+    }
+
+    response = client.post("/proximo", json=request_data)
+    assert response.status_code == 400
+    assert "respostas e gabarito devem ter o mesmo tamanho" in response.text
+
+# Teste: parada impedida por falta de eixos válidos
+def test_nao_para_sem_eixos_validos():
+    request_data = {
+        "ESTUDANTE": "Aluno1",
+        "AnoEscolarEstudante": "9",
+        "proficiencia": "500.0",
+        "profic.inic": "500.0",
+        "idItem": "ITEM1,ITEM2,ITEM3",
+        "parA": "1.0,1.0,1.0",
+        "parB": "250.0,250.0,250.0",
+        "parC": "0.2,0.2,0.2",
+        "administrado": "ITEM1,ITEM2,ITEM3",
+        "respostas": "A,A,A",
+        "gabarito": "A,A,A",
+        "erropadrao": "0.1",
+        "n.Ij": "45",
+        "componente": "LP",
+        "idEixo": "9999,9999,9999",
+        "idHabilidade": "1,2,3"
+    }
+
+    response = client.post("/proximo", json=request_data)
+    assert response.status_code == 200
+    assert response.json()[0] != "-1"
+
+# Teste: todas as respostas incorretas
+def test_respostas_incorretas():
+    request_data = {
+        "ESTUDANTE": "Aluno1",
+        "AnoEscolarEstudante": "9",
+        "proficiencia": "500.0",
+        "profic.inic": "500.0",
+        "idItem": "ITEM1,ITEM2",
+        "parA": "1.0,1.0",
+        "parB": "250.0,250.0",
+        "parC": "0.2,0.2",
+        "administrado": "ITEM1",
+        "respostas": "A",
+        "gabarito": "B",
+        "erropadrao": "0.5",
+        "n.Ij": "45",
+        "componente": "MT",
+        "idEixo": "1,2",
+        "idHabilidade": "2,3"
+    }
+
+    response = client.post("/proximo", json=request_data)
+    assert response.status_code == 200
+    resultado = response.json()
+    assert isinstance(resultado, list)
+    assert len(resultado) == 8
+
