@@ -7,7 +7,8 @@ from services.adaptive_testing import (
     EAP,
     criterio_parada,
     maxima_informacao_th,
-    proximo_item_criterio
+    proximo_item_criterio,
+    verificar_valid_eixo
 )
 from utils.helpers import parse_str_list, normalizar_componente
 
@@ -77,6 +78,9 @@ async def proximo_item(
         PAR = np.column_stack((parA, parB, parC))
         PAR = transformar_parametros(PAR, componente)
 
+        # NOVO: calcular validEixo com base nos eixos aplicados - Corrige parada na 8 questão
+        validEixo = verificar_valid_eixo(administrado_idx, idEixo)
+        
         if len(respostas_corrigidas) == 0:
             # PRIMEIRA RESPOSTA
             theta_est_ep = (profic_inic - 249.985) / 55.093
@@ -97,14 +101,30 @@ async def proximo_item(
             PAR_adm = PAR[administrado_idx, :]
             theta_est, theta_ep = EAP(respostas_corrigidas, PAR_adm, administrado_idx)
 
+            # NOVO: enviar validEixo - Corrige parada na 8 questão
             parar = criterio_parada(
                 theta_est, theta_ep, Area=componente, AnoEscolar=AnoEscolarEstudante,
-                n_resp=len(respostas_corrigidas), n_Ij=n_Ij
+                n_resp=len(respostas_corrigidas), n_Ij=n_Ij, validEixo=validEixo
             )
 
             if not parar:
                 INFO = maxima_informacao_th(theta_est, PAR)
                 pos = proximo_item_criterio(INFO, administrado_idx)
+
+                # NOVO: Aplica a escala SAEB correta conforme o componente - Corrige diferença de escala
+                if componente == "LP":
+                    theta_saeb = theta_est * 55.093 + 249.985
+                    erro_saeb = theta_ep * 55.093
+                elif componente == "MT":
+                    theta_saeb = theta_est * 55.892 + 249.964
+                    erro_saeb = theta_ep * 55.892
+                elif componente == "CN":
+                    theta_saeb = theta_est * 55.789 + 249.955
+                    erro_saeb = theta_ep * 55.789
+                else:  # componente CH ou outros
+                    theta_saeb = theta_est * 55.093 + 249.985
+                    erro_saeb = theta_ep * 55.093
+
                 return [
                     idItem[pos],
                     str(len(respostas_corrigidas) + 1),
@@ -112,10 +132,24 @@ async def proximo_item(
                     str(round(PAR[pos, 0], 6)),
                     str(round(PAR[pos, 1], 14)),
                     str(round(parC[pos], 3)),
-                    str(round(theta_est * 55.093 + 249.985, 13)),
-                    str(round(theta_ep * 55.093, 13))
+                    str(round(theta_saeb, 12)),
+                    str(round(erro_saeb, 13))
                 ]
             else:
+                # NOVO: Aplica a escala SAEB correta conforme o componente - Corrige diferença de escala
+                if componente == "LP":
+                    theta_saeb = theta_est * 55.093 + 249.985
+                    erro_saeb = theta_ep * 55.093
+                elif componente == "MT":
+                    theta_saeb = theta_est * 55.892 + 249.964
+                    erro_saeb = theta_ep * 55.892
+                elif componente == "CN":
+                    theta_saeb = theta_est * 55.789 + 249.955
+                    erro_saeb = theta_ep * 55.789
+                else:  # componente CH ou outros
+                    theta_saeb = theta_est * 55.093 + 249.985
+                    erro_saeb = theta_ep * 55.093
+
                 return [
                     "-1",
                     str(len(respostas_corrigidas)),
@@ -123,8 +157,8 @@ async def proximo_item(
                     "NA",
                     "NA",
                     "NA",
-                    str(round(theta_est * 55.093 + 249.985, 13)),
-                    str(round(theta_ep * 55.093, 13))
+                    str(round(theta_saeb, 12)),
+                    str(round(erro_saeb, 13))
                 ]
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
