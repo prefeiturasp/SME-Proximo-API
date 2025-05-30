@@ -27,14 +27,10 @@ def transformar_parametros(PAR, componente):
 
 def EAP(U, PAR, administrado):
     print("\n=== Iniciando EAP ===")
-    print(f"U (respostas): {U}")
-    print(f"PAR (parâmetros dos itens): {PAR}")
-    print(f"Administrado (índices dos itens administrados): {administrado}")
 
     U = np.array(U).reshape(1, -1)
     naoNA = np.where(~np.isnan(U))[1]
     It = len(naoNA)
-    print(f"Itens não nulos: {It}")
 
     q = 61
     Xr = np.linspace(-6, 6, q).reshape(-1, 1)
@@ -48,7 +44,7 @@ def EAP(U, PAR, administrado):
     Xrk = np.tile(Xr, (1, len(a)))
     P = ck + (1 - ck) / (1 + np.exp(-ak * (Xrk - bk)))
 
-    print(f"Probabilidades (P): {P}")  # Log adicional
+    
 
     Pjt = np.zeros((q, 1))
     theta_est = np.zeros(1)
@@ -66,9 +62,6 @@ def EAP(U, PAR, administrado):
     squad = (Xr - theta_est) ** 2
     ep_est = np.sqrt(np.sum(squad * Pj) / np.sum(Pj))
 
-    print(f"theta_est (proficiência estimada): {theta_est[0]}")
-    print(f"ep_est (erro padrão): {ep_est}")
-    print("=== Fim da EAP ===\n")
 
     return float(theta_est[0]), float(ep_est)
 
@@ -79,12 +72,6 @@ def parar_teste(theta, theta_erro, pontos_corte, valor_critico=1):
 
 def criterio_parada(theta_est, theta_ep, parada="EP", EP=0.5, n_resp=0, n_min=8, validEixo=True, Area="LP", AnoEscolar=8, n_Ij=45):
     print("\n=== Iniciando criterio_parada ===")
-    print(f"theta_est: {theta_est}")
-    print(f"theta_ep: {theta_ep}")
-    print(f"n_resp: {n_resp}")
-    print(f"n_min: {n_min}")
-    print(f"Area: {Area}")
-    print(f"AnoEscolar: {AnoEscolar}")
 
     niveis = {
         "LP": {
@@ -123,8 +110,6 @@ def criterio_parada(theta_est, theta_ep, parada="EP", EP=0.5, n_resp=0, n_min=8,
             Parada = True
             print("Critério de parada: Número máximo de itens atingido")
 
-    print(f"Parada: {Parada}")
-    print("=== Fim do criterio_parada ===\n")
     return Parada
 
 def maxima_informacao_th(theta_est, PAR, D=1):
@@ -136,28 +121,34 @@ def maxima_informacao_th(theta_est, PAR, D=1):
     # Calcula a probabilidade de resposta correta (P)
     P = c + (1 - c) / (1 + np.exp(-D * a * (theta_est - b)))
 
-    # Logs para verificação
-    print(f"Probabilidades (P): {P}")
-
     # Calcula a informação de Fisher
     max_info = (D ** 2) * (a ** 2) * ((1 - P) / P) * (((P - c) / (1 - c)) ** 2)
-
-    # Logs para verificação
-    print(f"Informação de Fisher (max_info): {max_info}")
 
     return max_info
 
 def proximo_item_criterio(INFO, administrado):
     print("\n=== Iniciando proximo_item_criterio ===")
-    print(f"INFO (informação de Fisher): {INFO}")
-    print(f"Administrado (índices dos itens administrados): {administrado}")
 
     # Zerar a informação dos itens já administrados
     INFO[administrado] = 0
-    print(f"INFO após zerar itens administrados: {INFO}")
-
+    
     # Selecionar o item com a maior informação de Fisher
     pos = np.argmax(INFO)
-    print(f"Próximo item selecionado (posição): {pos}")
-    print("=== Fim do proximo_item_criterio ===\n")
     return int(pos)
+
+# NOVO: calcular validEixo com base nos eixos aplicados - Corrige parada na 8 questão
+def verificar_valid_eixo(administrado_idx: list[int], id_eixo: list[int]) -> bool:
+    from collections import Counter
+
+    # Mapeia os eixos aplicados
+    eixos_aplicados = [id_eixo[i] for i in administrado_idx]
+    contagem = Counter(eixos_aplicados)
+
+    eixos_distintos = len(set(id_eixo))
+
+    if eixos_distintos >= 2:
+        if eixos_distintos < 4:
+            return sum(contagem.values()) >= eixos_distintos * 3
+        else:
+            return sum(contagem.values()) >= eixos_distintos * 2
+    return True
