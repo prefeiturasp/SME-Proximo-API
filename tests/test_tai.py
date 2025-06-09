@@ -81,7 +81,7 @@ def test_parar_teste_parar():
 
 # Testes para criterio_parada
 def test_criterio_ep_atingido():
-    assert criterio_parada(0.0, 0.4, parada="EP", EP=0.5, n_resp=10, n_min=8) == True
+    assert criterio_parada(0.0, 0.4, parada="EP", EP=0.5, n_resp=16, n_min=8, validEixo=True) == True
 
 def test_criterio_max_itens():
     assert criterio_parada(0.0, 1.0, n_resp=32, n_min=8) == True  # Atualizado para 32 itens
@@ -269,4 +269,116 @@ def test_respostas_incorretas():
     resultado = response.json()
     assert isinstance(resultado, list)
     assert len(resultado) == 8
+
+# Novos testes para o endpoint /proximo
+def test_criterio_ep_nao_atingido():
+    """
+    A prova NÃO deve parar por erro padrão (EP) se n_resp < 16,
+    mesmo que theta_ep <= EP e validEixo seja True.
+    """
+    assert criterio_parada(
+        theta_est=0.0,
+        theta_ep=0.4,
+        parada="EP",
+        EP=0.5,
+        n_resp=10,   # < 16, logo NÃO deve parar
+        n_min=8,
+        validEixo=True
+    ) == False
+
+
+def test_criterio_intervalo_proficiencia_atingido():
+    """
+    Deve parar porque o intervalo da proficiência está contido em um único nível.
+    """
+    # Nível esperado para LP 9º ano:
+    # [-0.89393831, 0.447935304, 1.342517713]
+    theta_est = 0.2  # Central dentro do 2º nível
+    theta_ep = 0.1   # Margem pequena => [0.1, 0.3] 100% contido no nível 2
+    assert criterio_parada(
+        theta_est=theta_est,
+        theta_ep=theta_ep,
+        parada="EP",
+        EP=0.5,
+        n_resp=10,
+        n_min=8,
+        validEixo=True,
+        Area="LP",
+        AnoEscolar=9,
+        n_Ij=109
+    ) == True
+
+def test_criterio_intervalo_proficiencia_nao_atingido():
+    """
+    Não deve parar porque o intervalo cobre mais de um nível.
+    """
+    theta_est = 0.2
+    theta_ep = 0.4  # Margem grande => [-0.2, 0.6], cruza dois níveis
+    assert criterio_parada(
+        theta_est=theta_est,
+        theta_ep=theta_ep,
+        parada="EP",
+        EP=0.5,
+        n_resp=10,
+        n_min=8,
+        validEixo=True,
+        Area="LP",
+        AnoEscolar=9,
+        n_Ij=109
+    ) == False
+
+def test_criterio_n_resp_menor_que_n_min():
+    """
+    Nunca deve parar se o número de respostas for menor que o mínimo.
+    """
+    assert criterio_parada(
+        theta_est=0.0,
+        theta_ep=0.1,
+        parada="EP",
+        EP=0.5,
+        n_resp=5,   # < n_min
+        n_min=8,
+        validEixo=True,
+        Area="LP",
+        AnoEscolar=9,
+        n_Ij=109
+    ) == False
+
+def test_criterio_validEixo_false_bloqueia_parada():
+    """
+    Mesmo com erro padrão baixo e n_resp ≥ 16, se validEixo=False, não deve parar.
+    """
+    assert criterio_parada(
+        theta_est=0.0,
+        theta_ep=0.2,
+        parada="EP",
+        EP=0.5,
+        n_resp=20,
+        n_min=8,
+        validEixo=False,
+        Area="LP",
+        AnoEscolar=9,
+        n_Ij=109
+    ) == False
+
+def test_maxima_informacao_th_vazio():
+    PAR = np.empty((0, 3))
+    info = maxima_informacao_th(0.5, PAR)
+    assert info.size == 0
+
+
+def test_transformar_parametros_formato_invalido():
+    PAR = np.array([[1.0, 250.0]])  # Só duas colunas (faltando parC)
+    resultado = transformar_parametros(PAR, "LP")
+    # Esperamos uma matriz 0x2 ou inválida
+    assert resultado.shape[1] == 2  # Deve ter duas colunas: transformada
+    assert resultado.shape[0] == 1  # Mesmo que tenha processado parcialmente
+
+def test_proximo_item_criterio_todos_administrados():
+    INFO = np.array([0.1, 0.9, 0.5])
+    administrado = [0, 1, 2]
+    pos = proximo_item_criterio(INFO, administrado)
+    # Como todos os itens foram administrados, espera-se que continue retornando 0
+    # ou o índice de maior informação, ignorando esse fato
+    assert pos in [0, 1, 2]
 
