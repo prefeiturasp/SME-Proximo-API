@@ -100,7 +100,7 @@ def criterio_parada(theta_est, theta_ep, parada="EP", EP=0.5, n_resp=0, n_min=8,
 
     Parada = False
     if n_resp >= n_min:
-        if parada == "EP" and theta_ep <= EP and validEixo:
+        if parada == "EP" and theta_ep <= EP and validEixo and n_resp >= 16:
             Parada = True
             print("Critério de parada: EP atingido")
         elif parar_teste(theta_est, theta_ep, pontos_corte, valor_critico) == 1 and validEixo:
