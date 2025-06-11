@@ -171,7 +171,7 @@ def test_proximo_item_parada():
     
     resultado = response.json()
     # Deve retornar -1 como primeiro elemento (parada pelo critério de 32 itens)
-    assert resultado[0] == "-1"
+    assert resultado[0] == -1
 
 # Teste para verificar transformação correta do componente
 def test_normalizacao_componente(sample_request_data):

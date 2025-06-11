@@ -151,14 +151,14 @@ async def proximo_item(
                     erro_saeb = theta_ep * 55.093
 
                 return [
-                    "-1",
-                    str(len(respostas_corrigidas)),
+                    -1,
                     "NA",
                     "NA",
                     "NA",
                     "NA",
-                    str(round(theta_saeb, 12)),
-                    str(round(erro_saeb, 13))
+                    "NA",
+                    round(theta_saeb, 4),
+                    round(erro_saeb, 4)
                 ]
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
