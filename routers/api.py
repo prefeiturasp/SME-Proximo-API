@@ -1,7 +1,9 @@
 
 from fastapi import APIRouter, HTTPException, Request, Body
-from typing import Any, Dict
+from typing import Any, Dict, Optional, Set
 import numpy as np
+
+
 from services.adaptive_testing import (
     transformar_parametros,
     EAP,
@@ -78,8 +80,14 @@ async def proximo_item(
         PAR = np.column_stack((parA, parB, parC))
         PAR = transformar_parametros(PAR, componente)
 
-        # NOVO: calcular validEixo com base nos eixos aplicados - Corrige parada na 8 questão
-        validEixo = verificar_valid_eixo(administrado_idx, idEixo)
+        # Corrige Python para na 10 questão e R para na 12 Questão
+        # Política de eixo compatível com o R: retorna validEixo e o conjunto de eixos permitidos (caso ainda não tenha atingido a meta)
+        validEixo = verificar_valid_eixo(
+            administrado_idx=administrado_idx,
+            id_eixo=idEixo,
+            n_resp=len(respostas_corrigidas),
+        )
+
         
         if len(respostas_corrigidas) == 0:
             # PRIMEIRA RESPOSTA
@@ -101,17 +109,23 @@ async def proximo_item(
             PAR_adm = PAR[administrado_idx, :]
             theta_est, theta_ep = EAP(respostas_corrigidas, PAR_adm, administrado_idx)
 
-            # NOVO: enviar validEixo - Corrige parada na 8 questão
+            # Envia validEixo compatível com R
             parar = criterio_parada(
-                theta_est, theta_ep, Area=componente, AnoEscolar=AnoEscolarEstudante,
-                n_resp=len(respostas_corrigidas), n_Ij=n_Ij, validEixo=validEixo
-            )
+                 theta_est, theta_ep, Area=componente, AnoEscolar=AnoEscolarEstudante,
+                 n_resp=len(respostas_corrigidas), n_Ij=n_Ij, validEixo=validEixo
+             )
 
             if not parar:
+                # Informação de Fisher em todos os itens (com PAR completo e já transformado),
+                # exatamente como no R (lá eles removem 'administrado' da matriz; aqui,
+                # a função proximo_item_criterio zera a INFO dos administrados).
                 INFO = maxima_informacao_th(theta_est, PAR)
+
+                # NÃO aplicar filtro por allowed_axes — o R não restringe a seleção por eixo nesta etapa.
+                # Apenas garanta que itens já administrados não possam ser escolhidos:
                 pos = proximo_item_criterio(INFO, administrado_idx)
 
-                # NOVO: Aplica a escala SAEB correta conforme o componente - Corrige diferença de escala
+                # Conversão para a escala SAEB (idêntico ao que você já faz)
                 if componente == "LP":
                     theta_saeb = theta_est * 55.093 + 249.985
                     erro_saeb = theta_ep * 55.093
@@ -121,7 +135,7 @@ async def proximo_item(
                 elif componente == "CN":
                     theta_saeb = theta_est * 55.789 + 249.955
                     erro_saeb = theta_ep * 55.789
-                else:  # componente CH ou outros
+                else:  # CH
                     theta_saeb = theta_est * 55.093 + 249.985
                     erro_saeb = theta_ep * 55.093
 

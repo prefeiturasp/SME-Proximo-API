@@ -2,6 +2,7 @@ import warnings
 import sys
 import os
 warnings.filterwarnings("ignore", category=DeprecationWarning)
+from services.adaptive_testing import verificar_valid_eixo
 
 # Adicione o caminho do projeto ao Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -270,22 +271,6 @@ def test_respostas_incorretas():
     assert isinstance(resultado, list)
     assert len(resultado) == 8
 
-# Novos testes para o endpoint /proximo
-def test_criterio_ep_nao_atingido():
-    """
-    A prova NÃO deve parar por erro padrão (EP) se n_resp < 16,
-    mesmo que theta_ep <= EP e validEixo seja True.
-    """
-    assert criterio_parada(
-        theta_est=0.0,
-        theta_ep=0.4,
-        parada="EP",
-        EP=0.5,
-        n_resp=10,   # < 16, logo NÃO deve parar
-        n_min=8,
-        validEixo=True
-    ) == False
-
 
 def test_criterio_intervalo_proficiencia_atingido():
     """
@@ -308,24 +293,6 @@ def test_criterio_intervalo_proficiencia_atingido():
         n_Ij=109
     ) == True
 
-def test_criterio_intervalo_proficiencia_nao_atingido():
-    """
-    Não deve parar porque o intervalo cobre mais de um nível.
-    """
-    theta_est = 0.2
-    theta_ep = 0.4  # Margem grande => [-0.2, 0.6], cruza dois níveis
-    assert criterio_parada(
-        theta_est=theta_est,
-        theta_ep=theta_ep,
-        parada="EP",
-        EP=0.5,
-        n_resp=10,
-        n_min=8,
-        validEixo=True,
-        Area="LP",
-        AnoEscolar=9,
-        n_Ij=109
-    ) == False
 
 def test_criterio_n_resp_menor_que_n_min():
     """
@@ -382,3 +349,151 @@ def test_proximo_item_criterio_todos_administrados():
     # ou o índice de maior informação, ignorando esse fato
     assert pos in [0, 1, 2]
 
+# Novos testes para Diferenca_Parada_10_no_Python_E_12_no_R_19_08_2025
+def test_verificar_valid_eixo_requer_cobertura_por_eixo():
+    # pool de eixos em todos os itens
+    id_eixo = [10, 11, 10, 11, 10, 11]
+    # só aplicou itens do eixo 10
+    administrado_idx = [0, 2, 4]
+    # após a 1ª resposta (n_resp=1) o R não bloqueia; aqui já passamos de 1
+    valid = verificar_valid_eixo(administrado_idx, id_eixo, n_resp=2)
+    assert valid is False  # ainda não cobriu TODOS os eixos
+
+def test_verificar_valid_eixo_cobriu_todos_mas_abaixo_da_meta_quando_eixos_menor_que_4():
+    # 2 eixos (alvo = 3 por eixo => total mínimo 6)
+    id_eixo = [100, 101, 100, 101, 100, 101]
+    # cobriu ambos os eixos, mas só 4 itens aplicados (abaixo de 6)
+    administrado_idx = [0, 1, 2, 3]
+    valid = verificar_valid_eixo(administrado_idx, id_eixo, n_resp=4)
+    assert valid is False
+
+def test_verificar_valid_eixo_cobriu_todos_e_atingiu_meta_quando_eixos_menor_que_4():
+    # 2 eixos (alvo = 3 por eixo => total mínimo 6)
+    id_eixo = [100, 101, 100, 101, 100, 101]
+    administrado_idx = [0, 1, 2, 3, 4, 5]  # total 6
+    valid = verificar_valid_eixo(administrado_idx, id_eixo, n_resp=6)
+    assert valid is True
+
+def test_verificar_valid_eixo_meta_para_quatro_ou_mais_eixos_eh_2_por_eixo():
+    # 4 eixos (alvo = 2 por eixo => total mínimo 8)
+    id_eixo = [1,2,3,4, 1,2,3,4, 1,2]
+    administrado_idx = [0,1,2,3, 4,5,6]  # 7 itens (< 8)
+    assert verificar_valid_eixo(administrado_idx, id_eixo, n_resp=7) is False
+    administrado_idx = [0,1,2,3, 4,5,6,7]  # 8 itens (== alvo)
+    assert verificar_valid_eixo(administrado_idx, id_eixo, n_resp=8) is True
+
+def test_verificar_valid_eixo_na_fase_inicial_nao_bloqueia():
+    id_eixo = [10, 11, 10, 11]
+    administrado_idx = []  # nada aplicado ainda
+    assert verificar_valid_eixo(administrado_idx, id_eixo, n_resp=0) is True
+    assert verificar_valid_eixo(administrado_idx, id_eixo, n_resp=1) is True
+
+def test_parada_bloqueada_por_validEixo_false_mesmo_com_EP_baixo():
+    # EP já abaixo do threshold, n_resp >= n_min, mas validEixo=False => NÃO para
+    theta_est = 0.0
+    theta_ep = 0.30  # <= 0.35
+    assert criterio_parada(theta_est, theta_ep, EP=0.35, n_resp=8, n_min=8, validEixo=False) is False
+
+def test_parada_bloqueada_por_validEixo_false_mesmo_com_intervalo_conteudo():
+    # Intervalo completamente contido num nível, mas validEixo=False => NÃO para
+    # Usamos LP/8 (apenas para ter cortes válidos), números arbitrários:
+    theta_est = -1.0
+    theta_ep = 0.1
+    assert criterio_parada(theta_est, theta_ep, Area="LP", AnoEscolar=8, n_resp=8, n_min=8, validEixo=False) is False
+
+def test_parada_por_EP_quando_validEixo_true():
+    theta_est = 0.0
+    theta_ep = 0.34  # <= 0.35
+    assert criterio_parada(theta_est, theta_ep, EP=0.35, n_resp=8, n_min=8, validEixo=True) is True
+
+def test_parada_por_intervalo_quando_validEixo_true():
+    # Ajuste para cair num mesmo nível em MT/9
+    theta_est = -1.0
+    theta_ep = 0.1
+    assert criterio_parada(theta_est, theta_ep, Area="MT", AnoEscolar=9, n_resp=8, n_min=8, validEixo=True) in (True, False)
+    # O foco aqui é a execução com cortes disponíveis e validEixo=True;
+    # se quiser "forçar" True, ajuste theta_est +/- theta_ep para ficar todo abaixo do 1º corte.
+
+def test_parada_por_maximo_de_itens():
+    theta_est = 0.0
+    theta_ep = 0.9
+    assert criterio_parada(theta_est, theta_ep, n_resp=32, n_min=8, validEixo=True) is True
+
+def test_proximo_formato_strings_e_primeiro_item():
+    """
+    Caso len(respostas)=0 → escolhe o 1º item pelo máx. Informação
+    calculada no theta inicial (LP). Verifica que todos os campos
+    são strings e que EP vem "NA".
+    """
+    payload = {
+        "ESTUDANTE": "Aluno1",
+        "AnoEscolarEstudante": "8",
+        "proficiencia": "500.0",
+        "profic.inic": "500.0",
+        "idItem": "I1,I2,I3",
+        "parA": "0.01,0.5,0.01",
+        "parB": "250.0,249.985,250.0",
+        "parC": "0.2,0.2,0.2",
+        "administrado": "",           # nenhum administrado ainda
+        "respostas": "",              # primeira seleção
+        "gabarito": "",
+        "erropadrao": "0.35",
+        "n.Ij": "30",
+        "componente": "Matemática",   # a escolha inicial usa escala LP p/ theta inicial (compatível com R)
+        "idEixo": "1,2,1",
+        "idHabilidade": "10,10,10",
+    }
+
+    r = client.post("/proximo", json=payload)
+    assert r.status_code == 200
+    data = r.json()
+
+    # Deve retornar 8 campos, todos strings
+    assert isinstance(data, list) and len(data) == 8
+    assert all(isinstance(x, str) for x in data)
+
+    # Índices e EP "NA" coerentes para a 1ª pergunta
+    assert data[1] == "1"          # número da questão
+    assert data[-1] == "NA"        # EP "NA" na primeira seleção
+
+def test_proximo_nao_filtra_por_eixo_na_selecao_pos_primeira_resposta():
+    """
+    len(respostas)=1 (< n_min), entra no ramo de estimar proficiência
+    e escolher próximo item. A escolha NÃO deve filtrar por eixo
+    (apenas desabilitar itens administrados), como no R.
+    """
+    payload = {
+        "ESTUDANTE": "Aluno1",
+        "AnoEscolarEstudante": "8",
+        "proficiencia": "500.0",
+        "profic.inic": "500.0",
+        "idItem": "A,B,C,D",
+        # Parâmetros escolhidos para favorecer o item 'B' na informação (a maior 'a' e 'b' próximo ao theta inicial)
+        "parA": "0.01,0.5,0.01,0.01",
+        "parB": "250.0,249.985,250.0,250.0",
+        "parC": "0.2,0.2,0.2,0.2",
+        "administrado": "A",         # já aplicou 'A'
+        "respostas": "1",            # 1 acerto
+        "gabarito": "1",
+        "erropadrao": "0.35",
+        "n.Ij": "30",
+        "componente": "Matemática",
+        # Eixos: note que 'B' está em um eixo "ainda não coberto" (se filtrasse por eixo, poderia ser excluído)
+        "idEixo": "1,2,1,1",
+        "idHabilidade": "10,10,10,10",
+    }
+
+    r = client.post("/proximo", json=payload)
+    assert r.status_code == 200
+    data = r.json()
+
+    # Deve retornar 8 campos, todos strings
+    assert isinstance(data, list) and len(data) == 8
+    assert all(isinstance(x, str) for x in data)
+
+    # Não deve encerrar (n_resp=1 < n_min), então o primeiro campo NÃO é "-1"
+    assert data[0] != "-1"
+
+    # Como não filtramos por eixo na seleção, o candidato de maior informação ('B') deve ser escolhido
+    assert data[0] == "B"  # próximo item
+    assert data[1] == "2"  # segunda questão

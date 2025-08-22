@@ -1,4 +1,6 @@
 import numpy as np
+from collections import Counter
+from typing import Tuple, Optional, Set
 
 def transformar_parametros(PAR, componente):
     """
@@ -70,9 +72,26 @@ def parar_teste(theta, theta_erro, pontos_corte, valor_critico=1):
     ff = np.digitize(theta_range, pontos_corte)
     return 1 if len(np.unique(ff)) == 1 else 0
 
-def criterio_parada(theta_est, theta_ep, parada="EP", EP=0.5, n_resp=0, n_min=8, validEixo=True, Area="LP", AnoEscolar=8, n_Ij=45):
-    print("\n=== Iniciando criterio_parada ===")
-
+def criterio_parada(
+    theta_est,
+    theta_ep,
+    parada="EP",
+    EP=0.35,            # padrão do R
+    n_resp=0,
+    n_min=8,
+    validEixo=True,
+    Area="LP",
+    AnoEscolar=8,
+    n_Ij=45,
+):
+    """
+    Critério de parada compatível com a API em R.
+    - Parada por EP: sem exigência de n_resp >= 16.
+    - Parada por intervalo (faixa de proficiência).
+    - Parada por máximo de itens (32 ou n_Ij-2).
+    - Só permite parada quando validEixo == True.
+    """
+    # Tabelas de níveis (pontos de corte) usadas no R
     niveis = {
         "LP": {
             2: [-2.722396675, -2.268618518, -1.361062204],
@@ -95,22 +114,30 @@ def criterio_parada(theta_est, theta_ep, parada="EP", EP=0.5, n_resp=0, n_min=8,
             9: [-0.4473032, 0.8970262, 1.793246],
         },
     }
+
     pontos_corte = niveis.get(Area, {}).get(AnoEscolar, [])
     valor_critico = 1
 
-    Parada = False
-    if n_resp >= n_min:
-        if parada == "EP" and theta_ep <= EP and validEixo and n_resp >= 16:
-            Parada = True
-            print("Critério de parada: EP atingido")
-        elif parar_teste(theta_est, theta_ep, pontos_corte, valor_critico) == 1 and validEixo:
-            Parada = True
-            print("Critério de parada: Intervalo de proficiência atingido")
-        elif n_resp == 32 or n_resp == n_Ij - 2:
-            Parada = True
-            print("Critério de parada: Número máximo de itens atingido")
+    if n_resp < n_min:
+        return False
 
-    return Parada
+    # Parada por EP (sem trava de 16 itens)
+    if parada == "EP" and theta_ep <= EP and validEixo:
+        return True
+
+    # Parada por intervalo de proficiência
+    if pontos_corte and validEixo:
+        theta_range = [theta_est - valor_critico * theta_ep, theta_est + valor_critico * theta_ep]
+        import numpy as np
+        ff = np.digitize(theta_range, pontos_corte)
+        if len(np.unique(ff)) == 1:
+            return True
+
+    # Parada por número máximo de itens
+    if n_resp == 32 or n_resp == n_Ij - 2:
+        return True
+
+    return False
 
 def maxima_informacao_th(theta_est, PAR, D=1):
     """
@@ -136,19 +163,46 @@ def proximo_item_criterio(INFO, administrado):
     pos = np.argmax(INFO)
     return int(pos)
 
-# NOVO: calcular validEixo com base nos eixos aplicados - Corrige parada na 8 questão
-def verificar_valid_eixo(administrado_idx: list[int], id_eixo: list[int]) -> bool:
-    from collections import Counter
 
-    # Mapeia os eixos aplicados
-    eixos_aplicados = [id_eixo[i] for i in administrado_idx]
+def verificar_valid_eixo(
+administrado_idx: list[int],
+    id_eixo: list[int],
+    n_resp: int
+) -> bool:
+    """
+    Política de eixo compatível com o código em R.
+
+    Retorna:
+      - validEixo: bool -> se a cobertura mínima por eixo já foi cumprida
+        (só então é permitido aplicar o critério de parada).
+
+    Regras:
+      1) Considera TODOS os eixos do pool de itens (id_eixo), não apenas os administrados.
+      2) Se ainda não cobriu TODOS os eixos ao menos 1 vez => validEixo=False.
+      3) Se já cobriu todos:
+         - Se len(eixos) < 4: alvo mínimo = 3 por eixo.
+         - Se len(eixos) >= 4: alvo mínimo = 2 por eixo.
+         Se total aplicado >= (#eixos * alvo) => validEixo=True.
+         Caso contrário => False.
+    """
+    eixos = list(dict.fromkeys(id_eixo))
+    num_eixos = len(eixos)
+
+    # Atalho: com 0/1 resposta, considera válido (compatível com o fluxo em R)
+    if n_resp <= 1:
+        return True
+
+    # Contagem por eixo entre os itens administrados
+    eixos_aplicados = [id_eixo[i] for i in administrado_idx if 0 <= i < len(id_eixo)]
     contagem = Counter(eixos_aplicados)
+    vistos = set(contagem.keys())
 
-    eixos_distintos = len(set(id_eixo))
+    # Se ainda não cobriu todos os eixos, não permite parada
+    if not set(eixos).issubset(vistos):
+        return False
 
-    if eixos_distintos >= 2:
-        if eixos_distintos < 4:
-            return sum(contagem.values()) >= eixos_distintos * 3
-        else:
-            return sum(contagem.values()) >= eixos_distintos * 2
-    return True
+    # Já cobriu todos; checar alvo por eixo
+    alvo = 3 if num_eixos < 4 else 2
+    total_aplicado = sum(contagem.values())
+
+    return total_aplicado >= num_eixos * alvo
